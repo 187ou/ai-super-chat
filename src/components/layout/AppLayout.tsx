@@ -92,10 +92,7 @@ export function AppLayout() {
           {!sidebarCollapsed && (
             <div className="min-w-0 flex-1">
               <p className="truncate text-[13px] font-semibold tracking-wide text-zinc-900 dark:text-zinc-50">
-                AI Developer
-              </p>
-              <p className="truncate text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-400 dark:text-zinc-500">
-                Assistant
+                AI Super Chat
               </p>
             </div>
           )}

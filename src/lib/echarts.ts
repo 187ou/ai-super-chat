@@ -161,7 +161,6 @@ export function fromNaturalLanguageToChartOption(input: string): EChartsOption {
       series: [
         {
           type: 'sankey',
-          layout: 'none',
           emphasis: { focus: 'adjacency' },
           nodeAlign: 'justify',
           data: [
@@ -292,11 +291,11 @@ export function fromNaturalLanguageToChartOption(input: string): EChartsOption {
             { name: '数据库', category: 2, value: 92 },
           ],
           links: [
-            { source: '网关', target: '认证服务', value: 'auth' },
-            { source: '网关', target: '订单服务', value: 'route' },
-            { source: '订单服务', target: '库存服务', value: 'check' },
-            { source: '订单服务', target: '数据库', value: 'write' },
-            { source: '认证服务', target: '数据库', value: 'read' },
+            { source: '网关', target: '认证服务', value: 1 },
+            { source: '网关', target: '订单服务', value: 1 },
+            { source: '订单服务', target: '库存服务', value: 1 },
+            { source: '订单服务', target: '数据库', value: 1 },
+            { source: '认证服务', target: '数据库', value: 1 },
           ],
           categories: [{ name: '入口层' }, { name: '业务层' }, { name: '数据层' }],
         },
