@@ -6,6 +6,7 @@ import {
   ChartSpline,
   ChevronRight,
   Code2,
+  Compass,
   FileCode2,
   FileText,
   Home,
@@ -19,14 +20,17 @@ import {
 import { useTheme } from '../../hooks/useTheme'
 import { Button } from '../ui/button'
 import { cn } from '../../lib/utils'
+import { FloatingAIAssistant } from '../assistant/FloatingAIAssistant'
 
 const navItems = [
   { to: '/', label: '工作台', icon: Home },
   { to: '/chat', label: 'AI 聊天', icon: Bot },
+  { to: '/content-production', label: '内容生产', icon: FileText },
   { to: '/codegen', label: '代码生成', icon: FileCode2 },
   { to: '/editor', label: '在线编辑器', icon: Code2 },
   { to: '/apidoc', label: '接口文档', icon: FileText },
   { to: '/charts', label: '可视化', icon: ChartSpline },
+  { to: '/intelligent-analysis', label: '智能预测分析', icon: Compass },
   { to: '/debug', label: '调试修复', icon: Bug },
   { to: '/multimodal', label: '多模态', icon: Image },
   { to: '/rag', label: '知识库检索', icon: FileText },
@@ -39,10 +43,12 @@ const SIDEBAR_STORAGE_KEY = 'ai_dev_assistant_sidebar_collapsed'
 const EDGE_TO_EDGE_PATHS = [
   '/',
   '/chat',
+  '/content-production',
   '/codegen',
   '/editor',
   '/apidoc',
   '/charts',
+  '/intelligent-analysis',
   '/debug',
   '/multimodal',
   '/rag',
@@ -63,7 +69,7 @@ export function AppLayout() {
   }, [sidebarCollapsed])
 
   return (
-    <div className="app-shell flex h-screen min-h-0 max-h-screen w-full flex-col overflow-hidden text-zinc-900 dark:text-zinc-100 md:flex-row">
+    <div className="app-shell relative flex h-screen min-h-0 max-h-screen w-full flex-col overflow-hidden text-zinc-900 dark:text-zinc-100 md:flex-row">
       <aside
         className={cn(
           'flex max-h-[42vh] min-h-0 w-full shrink-0 flex-col overflow-y-auto border-b border-zinc-200/80 bg-white/75 backdrop-blur-xl transition-[width] duration-200 ease-out dark:border-zinc-700/50 dark:bg-zinc-800',
@@ -175,7 +181,7 @@ export function AppLayout() {
             onClick={() => setDarkMode(!darkMode)}
           >
             {darkMode ? <Sun className="h-4 w-4 shrink-0" /> : <Moon className="h-4 w-4 shrink-0" />}
-            <span className={cn(sidebarCollapsed && 'md:sr-only')}>{darkMode ? '浅色模式' : '深色模式'}</span>
+            <span className={cn(sidebarCollapsed && 'md:sr-only')}>{darkMode ? '亮色模式' : '浅色模式'}</span>
           </Button>
         </div>
       </aside>
@@ -191,6 +197,7 @@ export function AppLayout() {
           <Outlet />
         </div>
       </main>
+      <FloatingAIAssistant />
     </div>
   )
 }

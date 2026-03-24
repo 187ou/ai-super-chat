@@ -148,11 +148,13 @@ function MiniStat({
 
 const entries = [
   { to: '/chat', title: 'AI 智能聊天', desc: '流式对话 + 代码/建议输出' },
+  { to: '/content-production', title: '内容生产', desc: '技术文档 / 博客 / 注释 / PPT 大纲 / 教程手册' },
   { to: '/rag', title: 'RAG 知识库检索', desc: '上传文档 · 基于内容问答' },
   { to: '/codegen', title: 'React 19 代码生成', desc: '组件 / Hook / 页面模板' },
   { to: '/editor', title: '在线编辑器', desc: 'Monaco · 多文件 · 快照 · 格式化' },
   { to: '/apidoc', title: '接口文档自动生成', desc: 'RESTful + Swagger 规范' },
   { to: '/charts', title: 'NLP 转 ECharts', desc: '折线 / 柱状 / 饼图 / 雷达图' },
+  { to: '/intelligent-analysis', title: '智能预测与分析', desc: '趋势预测 · 异常检测 · 根因/归因分析' },
   { to: '/debug', title: '调试修复', desc: '质量保证 · 分析并给出修复方案' },
   { to: '/multimodal', title: '多模态', desc: '上传截图 · 视觉理解与输出' },
 ]

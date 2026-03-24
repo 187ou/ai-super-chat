@@ -8,7 +8,7 @@ import { router } from './router'
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <div className="h-full min-h-0">
-      <RouterProvider router={router} />
+      <RouterProvider router={router} future={{ v7_startTransition: true }} />
     </div>
     <Toaster
       richColors

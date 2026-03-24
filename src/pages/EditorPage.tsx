@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { ComponentType } from 'react'
+import * as ReactNS from 'react'
+import * as ts from 'typescript'
 import '../lib/monacoSetup'
 import Editor from '@monaco-editor/react'
 import type { Monaco } from '@monaco-editor/react'
@@ -52,14 +55,78 @@ export default function EditorPage() {
   const [activeId, setActiveId] = useState(bundle.activeId)
   const [history, setHistory] = useState<HistorySnapshot[]>(bundle.history)
   const [markers, setMarkers] = useState<MEditor.IMarker[]>([])
-  const [rightTab, setRightTab] = useState<'problems' | 'history'>('problems')
+  const [rightTab, setRightTab] = useState<'problems' | 'history' | 'preview'>('problems')
   const [monacoReady, setMonacoReady] = useState(false)
+  const [previewVersion, setPreviewVersion] = useState(0)
+  const [previewError, setPreviewError] = useState<string>('')
+  const [previewComponent, setPreviewComponent] = useState<ComponentType | null>(null)
 
   const editorRef = useRef<MEditor.IStandaloneCodeEditor | null>(null)
   const monacoRef = useRef<Monaco | null>(null)
   const markersListenerRef = useRef<{ dispose: () => void } | null>(null)
 
   const activeFile = useMemo(() => files.find((f) => f.id === activeId) ?? files[0], [files, activeId])
+
+  const canPreview = useMemo(() => {
+    const p = activeFile?.path?.toLowerCase() ?? ''
+    return p.endsWith('.tsx') || p.endsWith('.jsx') || p.endsWith('.ts') || p.endsWith('.js')
+  }, [activeFile?.path])
+
+  useEffect(() => {
+    if (rightTab !== 'preview') return
+    if (!canPreview || !activeFile) return
+
+    setPreviewError('')
+    setPreviewComponent(null)
+
+    const t = window.setTimeout(() => {
+      try {
+        const source = activeFile.content ?? ''
+
+        const compiled = ts.transpileModule(source, {
+          fileName: activeFile.path,
+          compilerOptions: {
+            target: ts.ScriptTarget.ESNext,
+            module: ts.ModuleKind.CommonJS,
+            moduleResolution: ts.ModuleResolutionKind.NodeJs,
+            jsx: ts.JsxEmit.React,
+            jsxFactory: 'React.createElement',
+            jsxFragmentFactory: 'React.Fragment',
+            esModuleInterop: true,
+            allowJs: true,
+            skipLibCheck: true,
+            sourceMap: false,
+          },
+          reportDiagnostics: false,
+        })
+
+        const exportsObj: Record<string, unknown> = {}
+        const moduleObj = { exports: exportsObj }
+        const requireFn = (name: string) => {
+          if (name === 'react') return ReactNS
+          throw new Error(`预览不支持外部依赖：${name}（仅允许 import from "react"）`)
+        }
+
+        const fn = new Function('require', 'React', 'exports', 'module', compiled.outputText)
+        fn(requireFn, ReactNS, exportsObj, moduleObj)
+
+        const compUnknown = (moduleObj.exports as { default?: unknown }).default
+        if (!compUnknown) {
+          throw new Error('未找到 default 导出：请在文件中导出一个 React 组件（例如 export default function App() { ... }）')
+        }
+        if (typeof compUnknown !== 'function') {
+          throw new Error('default 导出不是一个 React 组件函数，请确保写了 export default function ...')
+        }
+        setPreviewComponent(() => compUnknown as ComponentType)
+        setPreviewVersion((v) => v + 1)
+      } catch (e) {
+        const message = e instanceof Error ? e.message : '未知预览错误'
+        setPreviewError(message)
+      }
+    }, 500)
+
+    return () => window.clearTimeout(t)
+  }, [rightTab, canPreview, activeFile])
 
   useEffect(() => {
     const t = window.setTimeout(() => {
@@ -326,6 +393,19 @@ export default function EditorPage() {
                 <History className="h-3.5 w-3.5" />
                 历史
               </button>
+              <button
+                type="button"
+                className={cn(
+                  'flex flex-1 items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-medium',
+                  rightTab === 'preview'
+                    ? 'border-b-2 border-violet-600 text-zinc-900 dark:border-violet-400 dark:text-zinc-50'
+                    : 'text-zinc-500 hover:text-zinc-800 dark:text-zinc-400',
+                )}
+                onClick={() => setRightTab('preview')}
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                预览
+              </button>
             </div>
 
             <div className={cn(featureScrollBodyClass, 'max-h-[40vh] min-h-[200px] md:max-h-none md:flex-1')}>
@@ -353,32 +433,67 @@ export default function EditorPage() {
                   )}
                 </ul>
               ) : (
-                <ul className="space-y-2 p-3">
-                  {history.length === 0 ? (
-                    <li className="text-xs text-zinc-500 dark:text-zinc-400">
-                      点击「记录快照」保存当前多文件状态，可随时恢复。
-                    </li>
-                  ) : (
-                    [...history].reverse().map((h) => (
-                      <li
-                        key={h.id}
-                        className="rounded-lg border border-zinc-200/80 bg-white/80 p-2 dark:border-zinc-700/80 dark:bg-zinc-900/60"
-                      >
-                        <p className="text-[11px] font-medium text-zinc-800 dark:text-zinc-100">{h.label}</p>
-                        <p className="mt-0.5 text-[10px] text-zinc-500">{h.files.length} 个文件</p>
-                        <Button
-                          type="button"
-                          size="sm"
-                          intent="outline"
-                          className="mt-2 h-7 w-full text-xs"
-                          onClick={() => restoreSnapshot(h)}
-                        >
-                          恢复此版本
-                        </Button>
+                rightTab === 'history' ? (
+                  <ul className="space-y-2 p-3">
+                    {history.length === 0 ? (
+                      <li className="text-xs text-zinc-500 dark:text-zinc-400">
+                        点击「记录快照」保存当前多文件状态，可随时恢复。
                       </li>
-                    ))
-                  )}
-                </ul>
+                    ) : (
+                      [...history].reverse().map((h) => (
+                        <li
+                          key={h.id}
+                          className="rounded-lg border border-zinc-200/80 bg-white/80 p-2 dark:border-zinc-700/80 dark:bg-zinc-900/60"
+                        >
+                          <p className="text-[11px] font-medium text-zinc-800 dark:text-zinc-100">{h.label}</p>
+                          <p className="mt-0.5 text-[10px] text-zinc-500">{h.files.length} 个文件</p>
+                          <Button
+                            type="button"
+                            size="sm"
+                            intent="outline"
+                            className="mt-2 h-7 w-full text-xs"
+                            onClick={() => restoreSnapshot(h)}
+                          >
+                            恢复此版本
+                          </Button>
+                        </li>
+                      ))
+                    )}
+                  </ul>
+                ) : (
+                  <div className="p-3">
+                    {!canPreview ? (
+                      <p className="text-xs text-zinc-500 dark:text-zinc-400">当前文件不支持预览。</p>
+                    ) : previewError ? (
+                      <div className="space-y-2">
+                        <p className="text-xs font-semibold text-red-600 dark:text-red-400">预览失败</p>
+                        <pre className="max-h-[220px] overflow-auto rounded-lg border border-red-200/80 bg-red-50/40 p-2 text-[10px] text-red-700 dark:border-red-900/30 dark:bg-red-950/30 dark:text-red-200">
+                          {previewError}
+                        </pre>
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                          支持：仅渲染文件中的 `default` 导出 React 组件；外部依赖仅允许 `react`。
+                        </p>
+                      </div>
+                    ) : previewComponent ? (
+                      <div
+                        key={previewVersion}
+                        className="rounded-2xl border border-zinc-200/80 bg-white/70 p-3 dark:border-zinc-700/80 dark:bg-zinc-900/60"
+                      >
+                        {/* 这里直接渲染动态编译的组件 */}
+                        {(() => {
+                          const C = previewComponent
+                          return C ? <C /> : null
+                        })()}
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-2 rounded-2xl border border-zinc-200/80 bg-white/60 p-3 text-xs text-zinc-500 dark:border-zinc-700/80 dark:bg-zinc-900/40 dark:text-zinc-400">
+                        <p className="font-medium text-zinc-700 dark:text-zinc-200">实时渲染</p>
+                        <p>切到预览标签后会自动编译并刷新。</p>
+                        <p>如果代码里没有 `export default`，会显示预览失败原因。</p>
+                      </div>
+                    )}
+                  </div>
+                )
               )}
             </div>
           </aside>

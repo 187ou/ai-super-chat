@@ -22,6 +22,7 @@ import {
 } from '../lib/pageStyles'
 import { cn } from '../lib/utils'
 import type { ChatMessage } from '../types'
+import { pushAssistantContext } from '../lib/assistantContext'
 
 function isAbortError(e: unknown): boolean {
   if (e instanceof DOMException && e.name === 'AbortError') return true
@@ -98,6 +99,12 @@ export default function ChatPage() {
       }
       await appendMessage(createAssistantMessage(output))
       bumpTodayStat('chatSessions', 1)
+      pushAssistantContext({
+        source: 'chat',
+        route: '/chat',
+        title: '聊天回复',
+        content: output,
+      })
       setLiveOutput('')
     } catch (error) {
       if (isAbortError(error)) {

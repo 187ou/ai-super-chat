@@ -16,6 +16,7 @@ import {
 import { MarkdownMessage } from '../components/common/MarkdownMessage'
 import { streamRagAnswer, uploadRagKb, deleteRagKb } from '../lib/ragStream'
 import { bumpTodayStat } from '../lib/dailyStats'
+import { pushAssistantContext } from '../lib/assistantContext'
 
 type DocItem = { filename: string; content: string }
 
@@ -162,6 +163,12 @@ export default function RagPage() {
       }
       toast.success('回答完成')
       bumpTodayStat('ragAnswers', 1)
+      pushAssistantContext({
+        source: 'rag',
+        route: '/rag',
+        title: `RAG 回答：${v.slice(0, 24)}`,
+        content: out,
+      })
     } catch (e) {
       if (isAbortError(e)) toast.message('已停止生成')
       else {
