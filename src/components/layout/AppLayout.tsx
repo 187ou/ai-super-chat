@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import {
   Bot,
@@ -21,6 +21,7 @@ import { useTheme } from '../../hooks/useTheme'
 import { Button } from '../ui/button'
 import { cn } from '../../lib/utils'
 import { FloatingAIAssistant } from '../assistant/FloatingAIAssistant'
+import { RoutePageFallback } from '../common/RoutePageFallback'
 
 const navItems = [
   { to: '/', label: '工作台', icon: Home },
@@ -55,10 +56,20 @@ const EDGE_TO_EDGE_PATHS = [
   '/profile',
 ]
 
+/** 侧栏 `to` 是否与当前路径相同（本项目均为扁平路径） */
+function navTargetIsCurrent(to: string, pathname: string): boolean {
+  if (to === '/') return pathname === '/'
+  return pathname === to
+}
+
 export function AppLayout() {
   const { darkMode, setDarkMode } = useTheme()
   const location = useLocation()
   const isEdgeToEdgePage = EDGE_TO_EDGE_PATHS.includes(location.pathname)
+  /** 侧栏点击后立刻为 true，抵消 startTransition 推迟更新时的「旧页冻结」体感 */
+  const [isLinkNavPending, setIsLinkNavPending] = useState(false)
+  const prevLocationKeyRef = useRef<string | null>(null)
+
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false
     return localStorage.getItem(SIDEBAR_STORAGE_KEY) === '1'
@@ -67,6 +78,14 @@ export function AppLayout() {
   useEffect(() => {
     localStorage.setItem(SIDEBAR_STORAGE_KEY, sidebarCollapsed ? '1' : '0')
   }, [sidebarCollapsed])
+
+  useLayoutEffect(() => {
+    const prev = prevLocationKeyRef.current
+    prevLocationKeyRef.current = location.key
+    if (prev !== null && prev !== location.key) {
+      setIsLinkNavPending(false)
+    }
+  }, [location.key])
 
   return (
     <div className="app-shell relative flex h-screen min-h-0 max-h-screen w-full flex-col overflow-hidden text-zinc-900 dark:text-zinc-100 md:flex-row">
@@ -138,6 +157,11 @@ export function AppLayout() {
               to={item.to}
               end={item.to === '/'}
               title={item.label}
+              onClick={() => {
+                if (!navTargetIsCurrent(item.to, location.pathname)) {
+                  setIsLinkNavPending(true)
+                }
+              }}
               className={({ isActive }) =>
                 cn(
                   'flex shrink-0 items-center rounded-xl text-[13px] font-medium transition-colors',
@@ -186,12 +210,13 @@ export function AppLayout() {
       <main className="flex min-h-0 flex-1 flex-col overflow-hidden bg-transparent text-zinc-900 dark:text-zinc-100">
         <div
           className={cn(
-            'mx-auto flex min-h-0 w-full flex-1 flex-col overflow-y-auto overflow-x-hidden transition-[max-width,padding] duration-200 ease-out',
+            /* flex-1 + min-h-0：子路由 Suspense fallback 才能用 flex-1 撑满主区，避免「加载中」缩成一条线 */
+            'mx-auto flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden transition-[max-width,padding] duration-200 ease-out',
             isEdgeToEdgePage ? 'max-w-none p-0' : 'px-6 py-10 md:px-10 md:py-12 lg:px-12',
             !isEdgeToEdgePage && (sidebarCollapsed ? 'max-w-7xl' : 'max-w-6xl'),
           )}
         >
-          <Outlet />
+          {isLinkNavPending ? <RoutePageFallback /> : <Outlet />}
         </div>
       </main>
       <FloatingAIAssistant />

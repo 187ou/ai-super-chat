@@ -8,6 +8,7 @@ import { router } from './router'
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <div className="h-full min-h-0">
+      {/* v7_startTransition：与未来 v7 对齐、消除 Future Flag 警告。侧栏点击时 AppLayout 会立即显示 RoutePageFallback，避免 transition 推迟期间的「旧页卡住」感。 */}
       <RouterProvider router={router} future={{ v7_startTransition: true }} />
     </div>
     <Toaster

@@ -1,13 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { Bot, Minus, Send, Sparkles, Square, X } from 'lucide-react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { Group } from 'three'
 import { toast } from 'sonner'
 import { streamChat } from '../../lib/ai'
 import { getRecentAssistantContexts } from '../../lib/assistantContext'
+import {
+  getAssistantRouteLabel,
+  matchAssistantNavigationIntent,
+  shouldAssistantNavigateOnly,
+} from '../../lib/assistantNavigation'
 import { Textarea } from '../ui/textarea'
 import { Button } from '../ui/button'
+import { cn } from '../../lib/utils'
 
 type AssistantState = 'idle' | 'thinking' | 'speaking'
 type Pos = { x: number; y: number }
@@ -20,20 +26,7 @@ function isAbortError(e: unknown): boolean {
 }
 
 function routeName(pathname: string): string {
-  const map: Record<string, string> = {
-    '/': '工作台',
-    '/chat': 'AI 聊天',
-    '/codegen': '代码生成',
-    '/editor': '在线编辑器',
-    '/apidoc': '接口文档',
-    '/charts': '可视化',
-    '/intelligent-analysis': '智能预测分析',
-    '/debug': '调试修复',
-    '/multimodal': '多模态',
-    '/rag': '知识库检索',
-    '/profile': '个人中心',
-  }
-  return map[pathname] ?? pathname
+  return getAssistantRouteLabel(pathname)
 }
 
 function buildContextPrompt(pathname: string): string {
@@ -107,6 +100,7 @@ function AvatarMesh({ state }: { state: AssistantState }) {
 
 export function FloatingAIAssistant() {
   const location = useLocation()
+  const navigate = useNavigate()
   const [expanded, setExpanded] = useState(false)
   const [minimized, setMinimized] = useState(false)
   const [prompt, setPrompt] = useState('')
@@ -118,6 +112,7 @@ export function FloatingAIAssistant() {
   const dragRef = useRef<{ startX: number; startY: number; baseX: number; baseY: number } | null>(null)
   const didDragRef = useRef(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
+  const [isDragging, setIsDragging] = useState(false)
 
   const style = useMemo(
     () => ({
@@ -154,6 +149,7 @@ export function FloatingAIAssistant() {
     const target = e.target as HTMLElement
     if (target.closest('[data-no-drag="true"]')) return
     didDragRef.current = false
+    setIsDragging(true)
     dragRef.current = {
       startX: e.clientX,
       startY: e.clientY,
@@ -177,6 +173,7 @@ export function FloatingAIAssistant() {
   }
 
   function onDragEnd(openWhenTap: boolean) {
+    setIsDragging(false)
     const dragged = didDragRef.current
     dragRef.current = null
     if (openWhenTap && !expanded && !dragged) {
@@ -199,17 +196,49 @@ export function FloatingAIAssistant() {
     if (loading) return
     const q = prompt.trim()
     if (!q) return
+
+    const navIntent = matchAssistantNavigationIntent(q)
+    if (navIntent) {
+      const alreadyThere = location.pathname === navIntent.path
+      if (!alreadyThere) {
+        navigate(navIntent.path)
+        toast.success(`已打开「${navIntent.label}」`)
+      } else {
+        toast.message(`当前已在「${navIntent.label}」页面`)
+      }
+
+      if (shouldAssistantNavigateOnly(q)) {
+        setPrompt('')
+        setAnswer(
+          alreadyThere
+            ? `当前已是「${navIntent.label}」页面，可直接使用页面功能或继续提问。`
+            : `已为您切换到「${navIntent.label}」页面，左侧导航已同步。可直接使用该页功能，或继续向我提问。`,
+        )
+        return
+      }
+    }
+
     const ac = new AbortController()
     abortRef.current = ac
     setLoading(true)
     setAssistantState('thinking')
     setAnswer('')
-    const enrichedPrompt = `${buildContextPrompt(location.pathname)}\n\n用户问题：${q}`
+    const pathForContext = navIntent?.path ?? location.pathname
+    const navNote = navIntent
+      ? `用户已请求打开「${navIntent.label}」页面，请结合该页面能力回答。\n`
+      : ''
+    const enrichedPrompt = `${buildContextPrompt(pathForContext)}\n${navNote}\n用户问题：${q}`
     try {
       let out = ''
       for await (const chunk of streamChat({ prompt: enrichedPrompt, history: [], signal: ac.signal })) {
         out += chunk
         setAnswer(out)
+      }
+      /* streamChat 在请求失败时不抛错，而是流式输出降级文案（见 lib/ai.ts），此处单独提示便于排查 */
+      if (out.includes('实时 AI 请求失败')) {
+        toast.error('无法连接 AI 服务', {
+          description: '请确认已启动后端代理（如 pnpm dev:server），并在 .env.server 配置 TONGYI_API_KEY；浏览器访问 http://localhost:8787/health 应返回 ok。',
+        })
       }
       setAssistantState('idle')
     } catch (e) {
@@ -228,7 +257,7 @@ export function FloatingAIAssistant() {
   return (
     <div
       ref={rootRef}
-      className="fixed z-[120] select-none"
+      className={cn('fixed z-[120] select-none', isDragging ? 'cursor-grabbing' : 'cursor-grab')}
       style={style}
       onPointerDown={onDragStart}
       onPointerMove={onDragMove}
@@ -238,9 +267,12 @@ export function FloatingAIAssistant() {
       {!expanded ? (
         <button
           type="button"
-          className="group relative h-20 w-20 rounded-2xl border border-zinc-200/80 bg-white/85 p-0 shadow-xl backdrop-blur dark:border-zinc-700/70 dark:bg-zinc-900/80"
+          className={cn(
+            'group relative h-20 w-20 rounded-2xl border border-zinc-200/80 bg-white/85 p-0 shadow-xl backdrop-blur dark:border-zinc-700/70 dark:bg-zinc-900/80',
+            isDragging ? 'cursor-grabbing' : 'cursor-grab',
+          )}
           onClick={(e) => e.preventDefault()}
-          title="打开智能助手"
+          title="打开智能助手（可拖动）"
         >
           <div className="h-full w-full overflow-hidden rounded-xl">
             <Canvas camera={{ position: [0, 0, 2.5], fov: 45 }}>
@@ -257,15 +289,15 @@ export function FloatingAIAssistant() {
         <div
           className={`w-[340px] overflow-hidden rounded-2xl border border-zinc-200/80 bg-white/95 shadow-2xl backdrop-blur dark:border-zinc-700/70 dark:bg-zinc-900/95 ${minimized ? 'h-14' : ''}`}
         >
-          <div className="flex items-center justify-between border-b border-zinc-200/70 px-3 py-2 dark:border-zinc-700/60">
-            <div className="flex items-center gap-2 text-xs font-medium text-zinc-700 dark:text-zinc-200">
+          <div className="flex cursor-grab items-center justify-between border-b border-zinc-200/70 px-3 py-2 active:cursor-grabbing dark:border-zinc-700/60">
+            <div className="flex min-w-0 flex-1 items-center gap-2 text-xs font-medium text-zinc-700 dark:text-zinc-200">
               <Bot className="h-4 w-4" />
               全局智能助手 · {assistantState === 'thinking' ? '思考中' : assistantState === 'speaking' ? '播报中' : '待机'}
             </div>
-            <div className="flex items-center gap-1" data-no-drag="true">
+            <div className="flex shrink-0 cursor-default items-center gap-1" data-no-drag="true">
               <button
                 type="button"
-                className="rounded-md p-1.5 text-zinc-500 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                className="cursor-pointer rounded-md p-1.5 text-zinc-500 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
                 onClick={() => setMinimized((v) => !v)}
                 title={minimized ? '展开' : '最小化'}
               >
@@ -273,7 +305,7 @@ export function FloatingAIAssistant() {
               </button>
               <button
                 type="button"
-                className="rounded-md p-1.5 text-zinc-500 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                className="cursor-pointer rounded-md p-1.5 text-zinc-500 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
                 onClick={() => setExpanded(false)}
                 title="关闭"
               >
@@ -283,7 +315,7 @@ export function FloatingAIAssistant() {
           </div>
 
           {!minimized && (
-            <div className="p-3" data-no-drag="true">
+            <div className="cursor-auto p-3" data-no-drag="true">
               <div className="mb-2 h-24 overflow-hidden rounded-xl border border-zinc-200/80 bg-zinc-50/60 dark:border-zinc-700/60 dark:bg-zinc-950/40">
                 <Canvas camera={{ position: [0, 0, 2.4], fov: 44 }}>
                   <ambientLight intensity={0.75} />

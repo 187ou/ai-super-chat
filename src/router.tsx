@@ -3,6 +3,7 @@ import { lazy, Suspense, type ReactNode } from 'react'
 import { Navigate, createBrowserRouter } from 'react-router-dom'
 import { getSettings } from './lib/storage'
 import { AppLayout } from './components/layout/AppLayout'
+import { RoutePageFallback } from './components/common/RoutePageFallback'
 
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
 const ChatPage = lazy(() => import('./pages/ChatPage'))
@@ -20,7 +21,7 @@ const NotFoundPage = lazy(() => import('./pages/NotFoundPage'))
 const RouteErrorPage = lazy(() => import('./pages/RouteErrorPage'))
 
 function withSuspense(node: ReactNode) {
-  return <Suspense fallback={<p className="text-sm text-slate-500">页面加载中...</p>}>{node}</Suspense>
+  return <Suspense fallback={<RoutePageFallback />}>{node}</Suspense>
 }
 
 function Guard({ children }: { children: ReactNode }) {
